@@ -23,14 +23,14 @@ REVIEW_EVENTS_TOPIC = "review_events"
 
 KAFKA_ADDRESS = os.getenv("KAFKA_ADDRESS", "localhost")
 KAFKA_PORT = os.getenv("KAFKA_PORT", "9092")
-SPARK_CLUSTER_MANAGER = os.getenv("SPARK_CLUSTER", "yarn")
+SPARK_MASTER = os.getenv("SPARK_MASTER", "yarn")
 S3_BUCKET = os.getenv("S3_BUCKET", 'foodeliver')
 OUTPUT_PATH = os.getenv("OUTPUT_PATH", f"s3a://{S3_BUCKET}/events")
 CHECKPOINT_PATH = os.getenv("CHECKPOINT_PATH", f"s3a://{S3_BUCKET}/checkpoints")
 
 
 # initialize a spark session
-spark = create_or_get_spark_session('Foodatasim Stream', SPARK_CLUSTER_MANAGER)
+spark = create_or_get_spark_session('Foodatasim Stream', SPARK_MASTER)
 spark.streams.resetTerminated()
 
 # create Kafka read streams
@@ -81,33 +81,43 @@ review_events = process_stream(
 
 # write a file to storage every 2 minutes in parquet format
 order_placed_events_writer = create_file_write_stream(order_placed_events, f"{OUTPUT_PATH}/{ORDER_PLACED_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_PLACED_EVENTS_TOPIC}")
+order_placed_events_writer.start()
+
 order_preparation_events_writer = create_file_write_stream(order_preparation_events, f"{OUTPUT_PATH}/{ORDER_PREPARATION_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_PREPARATION_EVENTS_TOPIC}")
+order_preparation_events_writer.start()
+
 order_ready_events_writer = create_file_write_stream(order_ready_events, f"{OUTPUT_PATH}/{ORDER_READY_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_READY_EVENTS_TOPIC}")
+order_ready_events_writer.start()
+
 delivery_partner_assignment_events_writer = create_file_write_stream(delivery_partner_assignment_events, f"{OUTPUT_PATH}/{DELIVERY_PARTNER_ASSIGNMENT_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{DELIVERY_PARTNER_ASSIGNMENT_EVENTS_TOPIC}"
                                         )
-order_pickup_events_writer = create_file_write_stream(order_pickup_events, f"{OUTPUT_PATH}/{ORDER_PICKUP_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_PICKUP_EVENTS_TOPIC}")
-partner_location_events_writer = create_file_write_stream(partner_location_events, f"{OUTPUT_PATH}/{PARTNER_LOCATION_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{PARTNER_LOCATION_EVENTS_TOPIC}")
-order_in_transit_events_writer = create_file_write_stream(order_in_transit_events, f"{OUTPUT_PATH}/{ORDER_IN_TRANSIT_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_IN_TRANSIT_EVENTS_TOPIC}")
-delivery_status_check_events_writer = create_file_write_stream(delivery_status_check_events, f"{OUTPUT_PATH}/{DELIVERY_STATUS_CHECK_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{DELIVERY_STATUS_CHECK_EVENTS_TOPIC}"
-                                                        )
-order_delivery_events_writer = create_file_write_stream(order_delivery_events, f"{OUTPUT_PATH}/{ORDER_DELIVERY_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_DELIVERY_EVENTS_TOPIC}")
-order_cancellation_events_writer = create_file_write_stream(order_cancellation_events, f"{OUTPUT_PATH}/{ORDER_CANCELLATION_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_CANCELLATION_EVENTS_TOPIC}")
-user_behaviour_events_writer = create_file_write_stream(user_behaviour_events, f"{OUTPUT_PATH}/{USER_BEHAVIOUR_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{USER_BEHAVIOUR_EVENTS_TOPIC}")
-restaurant_status_events_writer = create_file_write_stream(restaurant_status_events, f"{OUTPUT_PATH}/{RESTAURANT_STATUS_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{RESTAURANT_STATUS_EVENTS_TOPIC}")
-review_events_writer = create_file_write_stream(review_events, f"{OUTPUT_PATH}/{REVIEW_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{REVIEW_EVENTS_TOPIC}")
-
-order_placed_events_writer.start()
-order_preparation_events_writer.start()
-order_ready_events_writer.start()
 delivery_partner_assignment_events_writer.start()
+
+order_pickup_events_writer = create_file_write_stream(order_pickup_events, f"{OUTPUT_PATH}/{ORDER_PICKUP_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_PICKUP_EVENTS_TOPIC}")
 order_pickup_events_writer.start()
+
+partner_location_events_writer = create_file_write_stream(partner_location_events, f"{OUTPUT_PATH}/{PARTNER_LOCATION_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{PARTNER_LOCATION_EVENTS_TOPIC}")
 partner_location_events_writer.start()
+
+order_in_transit_events_writer = create_file_write_stream(order_in_transit_events, f"{OUTPUT_PATH}/{ORDER_IN_TRANSIT_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_IN_TRANSIT_EVENTS_TOPIC}")
 order_in_transit_events_writer.start()
+
+delivery_status_check_events_writer = create_file_write_stream(delivery_status_check_events, f"{OUTPUT_PATH}/{DELIVERY_STATUS_CHECK_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{DELIVERY_STATUS_CHECK_EVENTS_TOPIC}")
 delivery_status_check_events_writer.start()
+
+order_delivery_events_writer = create_file_write_stream(order_delivery_events, f"{OUTPUT_PATH}/{ORDER_DELIVERY_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_DELIVERY_EVENTS_TOPIC}")
 order_delivery_events_writer.start()
+
+order_cancellation_events_writer = create_file_write_stream(order_cancellation_events, f"{OUTPUT_PATH}/{ORDER_CANCELLATION_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{ORDER_CANCELLATION_EVENTS_TOPIC}")
 order_cancellation_events_writer.start()
+
+user_behaviour_events_writer = create_file_write_stream(user_behaviour_events, f"{OUTPUT_PATH}/{USER_BEHAVIOUR_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{USER_BEHAVIOUR_EVENTS_TOPIC}")
 user_behaviour_events_writer.start()
+
+restaurant_status_events_writer = create_file_write_stream(restaurant_status_events, f"{OUTPUT_PATH}/{RESTAURANT_STATUS_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{RESTAURANT_STATUS_EVENTS_TOPIC}")
 restaurant_status_events_writer.start()
+
+review_events_writer = create_file_write_stream(review_events, f"{OUTPUT_PATH}/{REVIEW_EVENTS_TOPIC}", f"{CHECKPOINT_PATH}/{REVIEW_EVENTS_TOPIC}")
 review_events_writer.start()
 
 spark.streams.awaitAnyTermination()

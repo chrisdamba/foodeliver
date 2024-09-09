@@ -101,7 +101,8 @@ def process_stream(stream, stream_schema):
               .withColumn("hour", hour(col("timestamp")))
               .withColumn("day", dayofmonth(col("timestamp")))
               )
-
+    # Add show to see incoming rows
+    stream.writeStream.format("console").outputMode("append")
     return stream
 
 
