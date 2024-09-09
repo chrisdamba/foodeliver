@@ -30,7 +30,7 @@ def create_or_get_spark_session(app_name, master="yarn"):
     spark = (SparkSession
              .builder
              .appName(app_name)
-             .master(master=master)
+             .master(master)
              .getOrCreate())
 
     return spark
@@ -45,6 +45,8 @@ def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_o
             A SparkSession object
         kafka_address: str
             Host address of the kafka bootstrap server
+        kafka_port: str
+            Port of the kafka bootstrap server
         topic : str
             Name of the kafka topic
         starting_offset: str
@@ -52,11 +54,12 @@ def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_o
     Returns:
         read_stream: DataStreamReader
     """
-
+    # kafka_bootstrap_servers = "localhost:9092"
+    kafka_bootstrap_servers = f"{kafka_address}:{kafka_port}"
     read_stream = (spark
                    .readStream
                    .format("kafka")
-                   .option("kafka.bootstrap.servers", f"{kafka_address}:{kafka_port}")
+                   .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
                    .option("failOnDataLoss", False)
                    .option("startingOffsets", starting_offset)
                    .option("subscribe", topic)
@@ -65,7 +68,7 @@ def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_o
     return read_stream
 
 
-def process_stream(stream, stream_schema, topic):
+def process_stream(stream, stream_schema):
     """
     Process stream to fetch on value from the kafka message.
     convert ts to timestamp format and produce year, month, day,
@@ -73,8 +76,11 @@ def process_stream(stream, stream_schema, topic):
     Parameters:
         stream : DataStreamReader
             The data stream reader for your stream
+        stream_schema : DataStreamSchema
+            The data stream schema
     Returns:
-        stream: DataStreamReader
+        stream : DataStreamReader
+            The data stream reader for your stream
     """
 
     # read only value from the incoming message and convert the contents
@@ -90,11 +96,10 @@ def process_stream(stream, stream_schema, topic):
 
     # Add month, day, hour to split the data into separate directories
     stream = (stream
-              .withColumn("ts", (col("ts") / 1000).cast("timestamp"))
-              .withColumn("year", year(col("ts")))
-              .withColumn("month", month(col("ts")))
-              .withColumn("hour", hour(col("ts")))
-              .withColumn("day", dayofmonth(col("ts")))
+              .withColumn("year", year(col("timestamp")))
+              .withColumn("month", month(col("timestamp")))
+              .withColumn("hour", hour(col("timestamp")))
+              .withColumn("day", dayofmonth(col("timestamp")))
               )
 
     return stream
