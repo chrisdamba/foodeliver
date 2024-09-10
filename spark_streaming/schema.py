@@ -12,8 +12,9 @@ schema = {
         StructField("eventType", StringType(), True),
         StructField("userId", StringType(), True),
         StructField("restaurantId", StringType(), True),
+        StructField("deliveryPartnerId", StringType(), True),
         StructField("orderId", StringType(), True),
-        StructField("item_ids", StringType(), True),
+        StructField("itemIds", StringType(), True),
         StructField("totalAmount", FloatType(), True),
         StructField("status", StringType(), True),
         StructField("orderPlacedAt", TimestampType(), True)
