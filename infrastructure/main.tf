@@ -205,7 +205,7 @@ resource "aws_instance" "kafka" {
     volume_type = "gp3"
   }
 
-  user_data = templatefile("${path.root}/kafkadata.tpl", {})
+  user_data = file("${path.root}/kafkadata.tpl")
 
   tags = {
     Name = "kafka_node-${random_id.kafka_node_id.dec}"
