@@ -6,11 +6,20 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.67.0"
     }
+    confluent = {
+      source  = "confluentinc/confluent"
+      version = "~> 2.2.0"
+    }
   }
 }
 
 provider "aws" {
   region = var.region
+}
+
+provider "confluent" {
+  cloud_api_key    = var.confluent_cloud_api_key
+  cloud_api_secret = var.confluent_cloud_api_secret
 }
 
 data "aws_availability_zones" "available" {
@@ -33,10 +42,129 @@ locals {
   az_names = sort(data.aws_availability_zones.available.names)
 }
 
-resource "random_id" "kafka_node_id" {
+locals {
+  kafka_topics = [
+    "order_placed_events",
+    "order_preparation_events",
+    "order_ready_events",
+    "delivery_partner_assignment_events",
+    "order_pickup_events",
+    "partner_location_events",
+    "order_in_transit_events",
+    "delivery_status_check_events",
+    "order_delivery_events",
+    "order_cancellation_events",
+    "user_behaviour_events",
+    "restaurant_status_events",
+    "review_events",
+  ]
+}
+
+resource "confluent_environment" "development" {
+  display_name = "Development"
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "confluent_kafka_cluster" "foodatasim_cluster" {
+  display_name = "foodatasim-cluster-${random_id.cluster_id.hex}"
+  availability = "SINGLE_ZONE"
+  cloud        = "AWS"
+  region       = var.region
+  basic {}
+
+  environment {
+    id = confluent_environment.development.id
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "random_id" "cluster_id" {
+  byte_length = 4
+}
+
+resource "random_id" "foodatasim_node_id" {
   byte_length = 2
   keepers = {
     key_name = var.key_name
+  }
+}
+resource "confluent_service_account" "foodatasim-sa" {
+  display_name = "foodatasim-app-sa"
+  description  = "Service Account for foodatasim app"
+}
+
+resource "confluent_role_binding" "foodatasim-sa-kafka-cluster-admin" {
+  principal   = "User:${confluent_service_account.foodatasim-sa.id}"
+  role_name   = "CloudClusterAdmin"
+  crn_pattern = confluent_kafka_cluster.foodatasim_cluster.rbac_crn
+}
+
+
+resource "confluent_api_key" "foodatasim-sa-kafka-api-key" {
+  display_name = "foodatasim-sa-kafka-api-key"
+  description  = "Kafka API Key that is owned by 'foodatasim-sa' service account"
+  owner {
+    id          = confluent_service_account.foodatasim-sa.id
+    api_version = confluent_service_account.foodatasim-sa.api_version
+    kind        = confluent_service_account.foodatasim-sa.kind
+  }
+
+  managed_resource {
+    id          = confluent_kafka_cluster.foodatasim_cluster.id
+    api_version = confluent_kafka_cluster.foodatasim_cluster.api_version
+    kind        = confluent_kafka_cluster.foodatasim_cluster.kind
+
+    environment {
+      id = confluent_environment.development.id
+    }
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+
+  depends_on = [
+    confluent_role_binding.foodatasim-sa-kafka-cluster-admin
+  ]
+}
+
+resource "confluent_kafka_topic" "foodatasim_topics" {
+  for_each        = toset(local.kafka_topics)
+  topic_name            = each.key
+  kafka_cluster {
+    id = confluent_kafka_cluster.foodatasim_cluster.id
+  }
+  partitions_count   = 4
+  rest_endpoint      = confluent_kafka_cluster.foodatasim_cluster.rest_endpoint
+  credentials {
+    key    = confluent_api_key.foodatasim-sa-kafka-api-key.id
+    secret = confluent_api_key.foodatasim-sa-kafka-api-key.secret
+  }
+  config = {
+    "cleanup.policy"                      = "delete"
+    "delete.retention.ms"                 = "86400000"
+    "max.compaction.lag.ms"               = "9223372036854775807"
+    "max.message.bytes"                   = "2097164"
+    "message.timestamp.after.max.ms"      = "9223372036854775807"
+    "message.timestamp.before.max.ms"     = "9223372036854775807"      
+    "message.timestamp.difference.max.ms" = "9223372036854775807"
+    "message.timestamp.type"              = "CreateTime"
+    "min.compaction.lag.ms"               = "0"
+    "min.insync.replicas"                 = "2"
+    "retention.bytes"                     = "-1"
+    "retention.ms"                        = "604800000"
+    "segment.bytes"                       = "104857600"
+    "segment.ms"                          = "604800000"
+  }
+
+  lifecycle {
+    prevent_destroy = false
   }
 }
 
@@ -117,101 +245,26 @@ resource "aws_security_group" "foodatasim_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-}
-
-
-# Security Group for Kafka
-resource "aws_security_group" "kafka_sg" {
-  name        = "kafka_sg"
-  description = "Allow Kafka traffic"
-  vpc_id      = aws_vpc.main_vpc.id
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["${var.my_ip}/32"] 
-  }
-
-ingress {
-    description = "Kafka External listener"
-    from_port   = 9092
-    to_port     = 9092
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kafka JMX"
-    from_port   = 9101
-    to_port     = 9101
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Schema Registry API"
-    from_port   = 8081
-    to_port     = 8081
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kafka REST Proxy"
-    from_port   = 8082
-    to_port     = 8082
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kafka Connect REST API"
-    from_port   = 8083
-    to_port     = 8083
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "Kafka UI"
-    from_port   = 8080
-    to_port     = 8080
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-
-# EC2 Instance for Kafka
-resource "aws_instance" "kafka" {
-  ami                    = data.aws_ami.server_ami.id
-  instance_type          = "t2.large"
-  subnet_id              = aws_subnet.public_subnets[1].id
-  vpc_security_group_ids = [aws_security_group.kafka_sg.id]
-  key_name               = var.key_name
-  associate_public_ip_address = true
-
-  root_block_device {
-    volume_size = 50
-    volume_type = "gp3"
-  }
-
-  user_data = file("${path.root}/kafkadata.tpl")
 
   tags = {
-    Name = "kafka_node-${random_id.kafka_node_id.dec}"
+    Name = "foodatasim_sg"
   }
 }
 
+resource "confluent_network" "aws-peering" {
+  display_name     = "AWS Peering Network"
+  cloud            = "AWS"
+  region           = var.region
+  cidr             = var.vpc_cidr
+  connection_types = ["PEERING"]
+  environment {
+    id = confluent_environment.development.id
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
 
 # EC2 Instance for foodatasim
 resource "aws_instance" "foodatasim" {
@@ -222,12 +275,36 @@ resource "aws_instance" "foodatasim" {
   key_name               = var.key_name
   associate_public_ip_address = true
   
-  user_data = templatefile("${path.root}/userdata.tpl", {
-    kafka_private_ip = aws_instance.kafka.private_ip
-    foodatasim_docker_image     = var.foodatasim_docker_image
-  })
+  connection {
+    type        = "ssh"
+    user        = "ubuntu"
+    private_key = file(var.private_key_path)
+    host        = self.public_ip
+    agent       = false
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update -y",
+      "sudo apt install apt-transport-https ca-certificates curl software-properties-common -y",
+      "sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc",
+      "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \\\"$VERSION_CODENAME\\\") stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null",
+      "sudo apt update -y",
+      "sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+      "sudo usermod -aG docker ubuntu",
+      "sudo docker run -d --name foodatasim \\",
+      "  -e FOODATASIM_KAFKA_ENABLED=true \\",
+      "  -e FOODATASIM_KAFKA_USE_LOCAL=false \\",
+      "  -e FOODATASIM_KAFKA_BROKER_LIST=\"${var.confluent_bootstrap_servers}\" \\",
+      "  -e FOODATASIM_KAFKA_SECURITY_PROTOCOL=\"SASL_SSL\" \\",
+      "  -e FOODATASIM_KAFKA_SASL_MECHANISM=\"PLAIN\" \\",
+      "  -e FOODATASIM_KAFKA_SASL_USERNAME=\"${var.confluent_cloud_api_key}\" \\",
+      "  -e FOODATASIM_KAFKA_SASL_PASSWORD=\"${var.confluent_cloud_api_secret}\" \\",
+      "  ${var.foodatasim_docker_image}"
+    ]
+  }
 
   tags = {
-    Name = "foodatasim_node-${random_id.kafka_node_id.dec}"
+    Name = "foodatasim_node-${random_id.foodatasim_node_id.dec}"
   }
 }
