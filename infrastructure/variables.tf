@@ -62,3 +62,15 @@ variable "confluent_bootstrap_servers" {
   description = "Confluent Cloud Bootstrap Servers"
   type        = string
 }
+
+variable "foodatasim_kafka_sasl_username" {
+  description = "Kafka SASL username"
+  type        = string
+  sensitive   = true
+}
+
+variable "foodatasim_kafka_sasl_password" {
+  description = "Kafka SASL password"
+  type        = string
+  sensitive   = true
+}
