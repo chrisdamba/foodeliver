@@ -6,18 +6,88 @@ from pyspark.sql.types import (IntegerType,
                                LongType,
                                BooleanType, TimestampType, FloatType)
 
+location_schema = StructType([
+   StructField("lat", DoubleType(), True),
+   StructField("lon", DoubleType(), True)
+])
+
 schema = {
+    'user_created_events': StructType([
+       StructField("id", StringType(), False),
+       StructField("timestamp", TimestampType(), True),
+       StructField("name", StringType(), True),
+       StructField("email", StringType(), True),
+       StructField("joinDate", LongType(), True),
+       StructField("location", location_schema, True),
+       StructField("preferences", StringType(), True),
+       StructField("dietRestrictions", StringType(), True),
+       StructField("orderFrequency", DoubleType(), True)
+    ]),
+    'restaurant_created_events': StructType([
+       StructField("id", StringType(), False),
+       StructField("timestamp", TimestampType(), True),
+       StructField("host", StringType(), True),
+       StructField("name", StringType(), True),
+       StructField("currency", IntegerType(), True),
+       StructField("phone", StringType(), True),
+       StructField("town", StringType(), True),
+       StructField("slugName", StringType(), True),
+       StructField("websiteLogoUrl", StringType(), True),
+       StructField("offline", StringType(), True),
+       StructField("location", location_schema, True),
+       StructField("cuisines", StringType(), True),
+       StructField("rating", DoubleType(), True),
+       StructField("totalRatings", DoubleType(), True),
+       StructField("prepTime", DoubleType(), True),
+       StructField("minPrepTime", DoubleType(), True),
+       StructField("avgPrepTime", DoubleType(), True),
+       StructField("pickupEfficiency", DoubleType(), True),
+       StructField("menuItemIds", StringType(), True),
+       StructField("capacity", IntegerType(), True)
+    ]),
+    'delivery_partner_created_events': StructType([
+       StructField("id", StringType(), False),
+       StructField("timestamp", TimestampType(), True),
+       StructField("name", StringType(), True),
+       StructField("joinDate", LongType(), True),
+       StructField("rating", DoubleType(), True),
+       StructField("totalRatings", DoubleType(), True),
+       StructField("experienceScore", DoubleType(), True),
+       StructField("speed", DoubleType(), True),
+       StructField("avgSpeed", DoubleType(), True),
+       StructField("currentOrderID", StringType(), True),
+       StructField("currentLocation", location_schema, True),
+       StructField("status", StringType(), True)
+    ]),
+    'menu_item_created_events': StructType([
+       StructField("id", StringType(), False),
+       StructField("timestamp", TimestampType(), True),
+       StructField("restaurantID", StringType(), True),
+       StructField("name", StringType(), True),
+       StructField("description", StringType(), True),
+       StructField("price", DoubleType(), True),
+       StructField("prepTime", DoubleType(), True),
+       StructField("category", StringType(), True),
+       StructField("type", StringType(), True),
+       StructField("popularity", DoubleType(), True),
+       StructField("prepComplexity", DoubleType(), True),
+       StructField("ingredients", StringType(), True),
+       StructField("isDiscountEligible", BooleanType(), True)
+    ]),
     'order_placed_events': StructType([
         StructField("timestamp", TimestampType(), True),
         StructField("eventType", StringType(), True),
-        StructField("userId", StringType(), True),
-        StructField("restaurantId", StringType(), True),
-        StructField("deliveryPartnerId", StringType(), True),
-        StructField("orderId", StringType(), True),
+        StructField("orderId", StringType(), False),
         StructField("itemIds", StringType(), True),
-        StructField("totalAmount", FloatType(), True),
-        StructField("status", StringType(), True),
-        StructField("orderPlacedAt", TimestampType(), True)
+        StructField("totalAmount", DoubleType(), True),
+        StructField("orderPlacedAt", LongType(), True),
+        StructField("customerId", StringType(), True),
+        StructField("restaurantId", StringType(), True),
+        StructField("deliveryPartnerID", StringType(), True),
+        StructField("deliveryCost", DoubleType(), True),
+        StructField("paymentMethod", StringType(), True),
+        StructField("deliveryAddress", location_schema, True),
+        StructField("reviewGenerated", BooleanType(), True)
     ]),
     'order_preparation_events': StructType([
         StructField("timestamp", TimestampType(), True),

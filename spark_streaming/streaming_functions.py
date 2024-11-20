@@ -31,12 +31,18 @@ def create_or_get_spark_session(app_name, master="yarn"):
              .builder
              .appName(app_name)
              .master(master)
+             .config("spark.sql.streaming.schemaInference", "true")
+             .config("spark.sql.shuffle.partitions", "1")
+             .config("spark.default.parallelism", "1")
+             .config("spark.streaming.stopGracefullyOnShutdown", "true")
+             .config("spark.executor.memory", "4g")
+             .config("spark.driver.memory", "4g")
              .getOrCreate())
 
     return spark
 
 
-def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_offset="earliest"):
+def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_offset="latest"):
     """
     Creates a kafka read stream
 
@@ -56,16 +62,19 @@ def create_kafka_read_stream(spark, kafka_address, kafka_port, topic, starting_o
     """
     # kafka_bootstrap_servers = "localhost:9092"
     kafka_bootstrap_servers = f"{kafka_address}:{kafka_port}"
-    read_stream = (spark
-                   .readStream
-                   .format("kafka")
-                   .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
-                   .option("failOnDataLoss", False)
-                   .option("startingOffsets", starting_offset)
-                   .option("subscribe", topic)
-                   .load())
-
-    return read_stream
+    try:
+        read_stream = (spark
+                       .readStream
+                       .format("kafka")
+                       .option("kafka.bootstrap.servers", kafka_bootstrap_servers)
+                       .option("subscribe", topic)
+                       .option("startingOffsets", starting_offset)
+                       .option("failOnDataLoss", "false")
+                       .load())
+        return read_stream
+    except Exception as e:
+        print(f"Error creating Kafka read stream for topic {topic}: {str(e)}")
+        return None
 
 
 def process_stream(stream, stream_schema):
@@ -102,11 +111,11 @@ def process_stream(stream, stream_schema):
               .withColumn("day", dayofmonth(col("timestamp")))
               )
     # Add show to see incoming rows
-    stream.writeStream.format("console").outputMode("append")
+    stream.writeStream.outputMode("append").format("console").start()
     return stream
 
 
-def create_file_write_stream(stream, storage_path, checkpoint_path, trigger="120 seconds", output_mode="append",
+def create_file_write_stream(stream, storage_path, checkpoint_path, trigger="1 minute", output_mode="append",
                              file_format="parquet"):
     """
     Write the stream back to a file store
@@ -133,6 +142,11 @@ def create_file_write_stream(stream, storage_path, checkpoint_path, trigger="120
                     .option("path", storage_path)
                     .option("checkpointLocation", checkpoint_path)
                     .trigger(processingTime=trigger)
-                    .outputMode(output_mode))
+                    .outputMode(output_mode)
+                    .withWatermark("timestamp", "10 minutes"))
 
     return write_stream
+
+
+def write_batch(batch_df, file_path):
+    batch_df.write.mode("append").parquet(file_path)
